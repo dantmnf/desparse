@@ -130,6 +130,11 @@ void desparse_streams(const wchar_t *f) {
     wchar_t *stream_name = malloc(65536);
     hSearchStream = FindFirstStreamW(f, FindStreamInfoStandard, &stream_find, 0);
     err = GetLastError();
+    if (err == ERROR_HANDLE_EOF) return;
+    if (hSearchStream == INVALID_HANDLE_VALUE) {
+        fwprintf(stderr, L"FindFirstStreamW on %s failed: %s\n", f, w32strerror(err));    
+        return;    
+    }
     do {
         swprintf(stream_name, 32768, L"%s%s", f, stream_find.cStreamName);
         err = desparse(stream_name);
