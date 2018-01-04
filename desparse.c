@@ -11,7 +11,8 @@
 #endif
 
 void usage(const wchar_t*);
-void recursive_desparse(const wchar_t *base);
+DWORD recursive_desparse(const wchar_t *base, int streams);
+void desparse_streams(const wchar_t *f);
 DWORD desparse(const wchar_t *f);
 
 const wchar_t *w32strerror(DWORD err) {
@@ -21,7 +22,8 @@ const wchar_t *w32strerror(DWORD err) {
 }
 
 int wmain(int argc, const wchar_t **argv) {
-    int recursive = 0, parse_opts = 1;
+    int recursive = 0, parse_opts = 1, streams = 0;
+    DWORD err;
     _setmode(_fileno(stdout), _O_U8TEXT);
     if (argc == 1)
     {
@@ -42,10 +44,16 @@ int wmain(int argc, const wchar_t **argv) {
             recursive = 1;
             continue;
         }
-        if (recursive)
-            recursive_desparse(argv[i]);
-        else
-            desparse(argv[i]);
+        if (parse_opts && wcsncmp(argv[i], L"-s", 3) == 0) {
+            streams = 1;
+            continue;
+        }
+        if (recursive) {
+            err = recursive_desparse(argv[i], streams);
+            if (err != ERROR_DIRECTORY) continue;
+        }
+        desparse(argv[i]);
+        if (streams) desparse_streams(argv[i]);
     }
     return 0;
 }
@@ -53,12 +61,13 @@ int wmain(int argc, const wchar_t **argv) {
 void usage(const wchar_t *argv0) {
     wprintf(L"usage: %s [opts] files ...\n", argv0);
     fputws( L"opts:\n", stdout);
-    fputws( L"  -r\trecursively desparse on directories and alternate streams\n", stdout);
+    fputws( L"  -r\trecursively desparse on directories\n", stdout);
+    fputws( L"  -s\tdesparse all alternate streams\n", stdout);
     fputws( L"  -h\tthis message\n", stdout);
     fputws( L"  --\tstop option parsing\n", stdout);
 }
 
-void recursive_desparse(const wchar_t *base) {
+DWORD recursive_desparse(const wchar_t *base, int streams) {
     HANDLE hSearch;
     WIN32_FIND_DATAW find;
     BOOL ret;
@@ -66,39 +75,23 @@ void recursive_desparse(const wchar_t *base) {
     wchar_t *name = malloc(65536);
     swprintf_s(name, 32768, L"%s\\*", base);
     hSearch = FindFirstFileW(name, &find);
+    err = GetLastError();
+    if (err == ERROR_DIRECTORY) {
+        return err;
+    }
     if (hSearch == INVALID_HANDLE_VALUE) {
-        fwprintf(stderr, L"FindFirstFile on %s failed: %s\n", base, w32strerror(GetLastError()));
-        return;
+        fwprintf(stderr, L"FindFirstFile on %s failed: %s\n", base, w32strerror(err));
+        return err;
     }
     do {
         if (wcscmp(find.cFileName, L".") == 0 || wcscmp(find.cFileName, L"..") == 0)
             goto skip;
         swprintf(name, 32768, L"%s\\%s", base, find.cFileName);
         if (find.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            recursive_desparse(name);
+            recursive_desparse(name, streams);
         } else if (find.dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE) {
-            HANDLE hSearchStream;
-            WIN32_FIND_STREAM_DATA stream_find;
             desparse(name);
-            hSearchStream = FindFirstStreamW(name, FindStreamInfoStandard, &stream_find, 0);
-            err = GetLastError();
-            if (hSearchStream != INVALID_HANDLE_VALUE)
-            {
-                wchar_t *stream_name = malloc(65536);
-                do {
-                    swprintf(stream_name, 32768, L"%s:%s", name, stream_find.cStreamName);
-                    err = desparse(stream_name);
-                    ret = FindNextStreamW(hSearchStream, &stream_find);
-                    err = GetLastError();
-                    if (!ret && err != ERROR_HANDLE_EOF) {
-                        fwprintf(stderr, L"FindNextStreamW on %s failed: %s\n", name, w32strerror(err));
-                    }
-                } while(ret);
-                free(stream_name);
-            } else if (err != ERROR_HANDLE_EOF) {
-                fwprintf(stderr, L"FindFirstStreamW on %s failed: %s\n", name, w32strerror(err));
-            }
-            
+            if (streams) desparse_streams(name);            
         } else {
             wprintf(L"%s is not a sparse file\n", name);
         }
@@ -111,6 +104,27 @@ skip:
     } while (ret);
     FindClose(hSearch);
     free(name);
+    return err;
+}
+
+void desparse_streams(const wchar_t *f) {
+    BOOL ret;
+    DWORD err;
+    HANDLE hSearchStream;
+    WIN32_FIND_STREAM_DATA stream_find;
+    wchar_t *stream_name = malloc(65536);
+    hSearchStream = FindFirstStreamW(f, FindStreamInfoStandard, &stream_find, 0);
+    err = GetLastError();
+    do {
+        swprintf(stream_name, 32768, L"%s:%s", f, stream_find.cStreamName);
+        err = desparse(stream_name);
+        ret = FindNextStreamW(hSearchStream, &stream_find);
+        err = GetLastError();
+        if (!ret && err != ERROR_HANDLE_EOF) {
+            fwprintf(stderr, L"FindNextStreamW on %s failed: %s\n", f, w32strerror(err));
+        }
+    } while(ret);
+    free(stream_name);
 }
 
 DWORD desparse(const wchar_t *f){
