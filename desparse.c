@@ -36,24 +36,37 @@ int wmain(int argc, const wchar_t **argv) {
             parse_opts = 0;
             continue;
         }
-        if (parse_opts && wcsncmp(argv[i], L"-h", 3) == 0) {
-            usage(argv[0]);
-            break;
-        }
-        if (parse_opts && wcsncmp(argv[i], L"-r", 3) == 0) {
-            recursive = 1;
-            continue;
-        }
-        if (parse_opts && wcsncmp(argv[i], L"-s", 3) == 0) {
-            streams = 1;
+        if (parse_opts && *argv[i] == L'-') {
+            const wchar_t *optchr = &argv[i][1];
+            while (*optchr) {
+                switch (*optchr) {
+                    case L'h':
+                        usage(argv[0]);
+                        exit(0);
+                        break;
+                    case L'r':
+                        recursive = 1;
+                        break;
+                    case L's':
+                        streams = 1;
+                        break;
+                    default:
+                        fwprintf(stderr, L"unknown option: -%c\n", *optchr);
+                        exit(1);
+                        break;
+                }
+                optchr++;
+            }
             continue;
         }
         if (recursive) {
             err = recursive_desparse(argv[i], streams);
             if (err != ERROR_DIRECTORY) continue;
         }
-        desparse(argv[i]);
-        if (streams) desparse_streams(argv[i]);
+        if (streams)
+            desparse_streams(argv[i]);
+        else
+            desparse(argv[i]);        
     }
     return 0;
 }
@@ -90,8 +103,10 @@ DWORD recursive_desparse(const wchar_t *base, int streams) {
         if (find.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             recursive_desparse(name, streams);
         } else if (find.dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE) {
-            desparse(name);
-            if (streams) desparse_streams(name);            
+            if (streams)
+                desparse_streams(name);
+            else
+                desparse(name);
         } else {
             wprintf(L"%s is not a sparse file\n", name);
         }
@@ -116,7 +131,7 @@ void desparse_streams(const wchar_t *f) {
     hSearchStream = FindFirstStreamW(f, FindStreamInfoStandard, &stream_find, 0);
     err = GetLastError();
     do {
-        swprintf(stream_name, 32768, L"%s:%s", f, stream_find.cStreamName);
+        swprintf(stream_name, 32768, L"%s%s", f, stream_find.cStreamName);
         err = desparse(stream_name);
         ret = FindNextStreamW(hSearchStream, &stream_find);
         err = GetLastError();
