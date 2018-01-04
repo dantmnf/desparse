@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.2)
+project(desparse C)
+add_definitions(-DUNICODE -D_UNICODE -DNTDDI_VERSION=NTDDI_WIN7 -D_WIN32_WINNT=0x0601 -DWINVER=0x0601)
+add_executable(desparse desparse.c)
+if(MSVC)
+  set_target_properties(desparse PROPERTIES LINK_FLAGS "setargv.obj")
+elseif(MINGW)
+  # workaround MSYS2 MinGW-w64 bugs (libwinpthread-1.dll dependency)
+  set_target_properties(desparse PROPERTIES LINK_FLAGS "-municode -Wl,--whole-archive,-Bstatic -lwinpthread -Wl,-Bdynamic,--no-whole-archive")
+endif()
+
+target_link_libraries(desparse kernel32)
