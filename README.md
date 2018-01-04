@@ -6,9 +6,10 @@ Some applications won't work with sparse files, even if the sparse file is fully
 ## Usage
 ```
 C:\> desparse
-usage: desparse [opts] files ...
+usage: desparse [-rsh] files ...
 opts:
-  -r    recursively desparse on directories and alternate streams
+  -r    recursively desparse on directories
+  -s    desparse all alternate streams
   -h    this message
   --    stop option parsing
 ```

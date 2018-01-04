@@ -72,7 +72,7 @@ int wmain(int argc, const wchar_t **argv) {
 }
 
 void usage(const wchar_t *argv0) {
-    wprintf(L"usage: %s [opts] files ...\n", argv0);
+    wprintf(L"usage: %s [-rsh] files ...\n", argv0);
     fputws( L"opts:\n", stdout);
     fputws( L"  -r\trecursively desparse on directories\n", stdout);
     fputws( L"  -s\tdesparse all alternate streams\n", stdout);
